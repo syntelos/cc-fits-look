@@ -9,35 +9,52 @@ then
     mkdir src
 fi
 
+1>&2 echo "Download"
+
 cd src
 
 if $(2>&1 1>/dev/null which wget)
 then
     #
-    # download sources, once, continue partials
+    # Download sources, once, continue partials
     #
     if wget -c -nc -i ../sources.txt
     then
-	echo OK
+	1>&2 echo "OK"
     else
 	1>&2 echo "$0 error downloading files referenced from sources.txt."
 	exit 1
     fi
 else
     cat<<EOF>&2
-$0 error 
+$0 error, missing 'wget' required for downloading source packages.
 EOF
+    exit 1
 fi
 
-for pkg in *
+1>&2 echo "Unpack"
+
+for pkg in *.tar*
 do
-    echo $pkg
+
     case $(file ${pkg}) in
+
 	*compressed*)
-	    tar xvfz ${pkg}
+
+	    if tar xfz ${pkg}
+	    then
+		echo "U ${pkg}"
+	    else
+		echo "X ${pkg}"
+	    fi
 	    ;;
 	*)
-	    tar xvf ${pkg}
+	    if tar xf ${pkg}
+	    then
+		echo "U ${pkg}"
+	    else
+		echo "X ${pkg}"
+	    fi
 	    ;;
     esac
 done

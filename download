@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# Download and unpack the packages referenced in 'sources.txt' under
+# directory 'src'.
+#
+
+if [ ! -d src ]
+then
+    mkdir src
+fi
+
+cd src
+
+if $(2>&1 1>/dev/null which wget)
+then
+    #
+    # download sources, once, continue partials
+    #
+    if wget -c -nc -i ../sources.txt
+    then
+	echo OK
+    else
+	1>&2 echo "$0 error downloading files referenced from sources.txt."
+	exit 1
+    fi
+else
+    cat<<EOF>&2
+$0 error 
+EOF
+fi
+
+for pkg in *
+do
+    echo $pkg
+    case $(file ${pkg}) in
+	*compressed*)
+	    tar xvfz ${pkg}
+	    ;;
+	*)
+	    tar xvf ${pkg}
+	    ;;
+    esac
+done
+
+
+exit 0

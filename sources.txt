@@ -1,0 +1,4 @@
+http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio3410.tar.gz
+https://heasarc.gsfc.nasa.gov/docs/software/fitsio/ccfits/CCfits-2.5.tar.gz
+https://heasarc.gsfc.nasa.gov/docs/software/fitsio/cexamples/cexamples.tar
+https://heasarc.gsfc.nasa.gov/docs/software/ftools/fitsverify/fitsverify-4.18.tar.gz

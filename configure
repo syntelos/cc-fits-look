@@ -1,0 +1,189 @@
+#!/bin/bash
+
+basd=$(pwd)
+srcd=${basd}/src
+libd=${basd}/lib
+bind=${basd}/bin
+
+export CC=clang
+export CXX=clang++
+export CONF_CFITS="--with-cfitsio=${basd}"
+
+#
+# Directories to scan
+#
+cfits_dir="src/cfitsio"
+cfits_tgt="include/fitsio.h"
+
+ccfits_di="src/CCfits"
+ccfits_tg="include/CCfits/CCfits"
+
+parallel_batch="/tmp/cc-fits-look.parallel_batch"
+if ! cat<<EOF>${parallel_batch}
+src/cexamples
+src/fitsverify
+EOF
+then
+    echo "$0 error initializing temp file."
+    exit 1
+fi
+
+#
+# Directories to configure '--with-cfitsio=DIR'
+#
+cc_conf="/tmp/cc-fits-look.configure"
+if ! cat<<EOF>${cc_conf}
+ccfits
+EOF
+then
+    echo "$0 error initializing temp file."
+    exit 1
+fi
+
+function _configure {
+    src_dir="${1}"
+
+    src_name=$(basename "${src_dir}" )
+
+    if [ -n "$(egrep ${src_name} ${cc_conf} )" ]
+    then
+	CCONF=${CONF_CFITS}
+    else
+	CCONF=''
+    fi
+
+    if [ -f ${src_dir}/configure ]
+    then
+	echo "C ?? ${src_dir}"
+
+	if [ -f ${src_dir}/config.h ]
+	then
+	    echo "C AB ${src_dir}"
+	    return 0
+
+	elif 2>/dev/null $(cd ${src_dir} && chmod 755 configure && 2>&1 1>/tmp/configure.log ./configure --prefix ${basd} ${CCONF} ) ||
+	    ( test -f ${src_dir}/config.log && test -n "$(tail -n 1 ${src_dir}/config.log | egrep '^configure: exit 0' )" )
+	then
+	    echo "C AD ${src_dir}"
+	    return 0
+	else
+	    cat<<EOF>&2
+$0 error configuring '${src_dir}'.
+
+EOF
+
+	    2>/dev/null cat -n ${src_dir}/configure.log | sed 's/^/ /' | tail -n 20
+
+	    return 1
+	fi
+    fi
+}
+
+function _make {
+    src_dir="${1}"
+
+    if [ -f ${src_dir}/Makefile ]
+    then
+	echo "M ?? ${src_dir}"
+
+	if 2>/dev/null $(cd ${src_dir} && 2>&1 1>make.log make ) ||
+	    ( test -f ${src_dir}/make.log && test -n "$(tail -n 1 ${src_dir}/make.log | egrep '^make\[1\]: Leaving directory' )" )
+	then
+	    echo "M OK ${src_dir}"
+	else
+	    cat<<EOF>&2
+$0 error building '${src_dir}' using 'make'.
+
+EOF
+	    2>/dev/null cat -n ${src_dir}/make.log | sed 's/^/ /' | tail -n 20
+
+	    exit 1
+	fi
+    fi
+}
+
+function _make_install {
+    src_dir="${1}"
+
+    if [ -f ${src_dir}/Makefile ]
+    then
+	echo "I ?? ${src_dir}"
+
+	if $(cd ${src_dir} && 2>&2 1>make-install.log make install)
+	then
+	    echo "I OK ${src_dir}"
+	else
+	    echo "I NG ${src_dir}"
+	    cat -n ${src_dir}/make-install.log | sed 's/^/ /'
+	    echo "I NG ${src_dir}"
+	fi
+    fi
+    return 0
+}
+
+if [ ! -f ${cfits_tgt} ]
+then
+
+    if ! _configure ${cfits_dir}
+    then
+	exit 1
+    fi
+    if ! _make ${cfits_dir}
+    then
+	exit 1
+    fi
+    if ! _make_install ${cfits_dir}
+    then
+	exit 1
+    fi
+fi
+
+if [ ! -f ${ccfits_tg} ]
+then
+
+    if ! _configure ${ccfits_di}
+    then
+	exit 1
+    fi
+    if ! _make ${ccfits_di}
+    then
+	exit 1
+    fi
+    if ! _make_install ${ccfits_di}
+    then
+	exit 1
+    fi
+fi
+
+#
+# Configure
+#
+for src_dir in $(cat "${parallel_batch}" )
+do
+    if ! _configure ${src_dir}
+    then
+	exit 1
+    fi
+done
+
+#
+# Make
+#
+for src_dir in $(cat "${parallel_batch}" )
+do
+    if ! _make ${src_dir}
+    then
+	exit 1
+    fi
+done
+
+#
+# Make install
+#
+for src_dir in $(cat "${parallel_batch}" )
+do
+    if ! _make_install ${src_dir}
+    then
+	exit 1
+    fi
+done

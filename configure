@@ -114,6 +114,9 @@ function _make_gen {
 	    #
 	    #   cc -o myprog myprog.c -L. -lcfitsio -lm -lnsl -lsocket
 	    #
+	    # in 'src/cfitsio' the CC output from MAKE for 'make testprog' 
+	    # is a way to pickup the local host library linking requirements
+	    #
 	    cat<<EOF>>Makefile
 CC = ${CC}
 CXX = ${CXX}

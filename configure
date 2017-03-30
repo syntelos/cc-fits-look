@@ -18,16 +18,6 @@ cfits_tgt="include/fitsio.h"
 ccfits_di="src/CCfits"
 ccfits_tg="include/CCfits/CCfits"
 
-parallel_batch="/tmp/cc-fits-look.parallel_batch"
-if ! cat<<EOF>${parallel_batch}
-src/cexamples
-src/fitsverify
-EOF
-then
-    echo "$0 error initializing temp file."
-    exit 1
-fi
-
 #
 # Directories to configure '--with-cfitsio=DIR'
 #
@@ -36,7 +26,19 @@ if ! cat<<EOF>${cc_conf}
 ccfits
 EOF
 then
-    echo "$0 error initializing temp file."
+    echo "$0 error initializing temp file 'conf'."
+    exit 1
+fi
+
+#
+# Directories to configure '_make_gen'
+#
+cc_mkgen="/tmp/cc-fits-look.configure.cc_mkgen"
+if ! cat<<EOF>${cc_mkgen}
+cexamples
+EOF
+then
+    echo "$0 error initializing temp file 'mkgen'."
     exit 1
 fi
 
@@ -79,6 +81,164 @@ EOF
     fi
 }
 
+function _make_gen {
+    src_dir="${1}"
+
+    if [ ! -f ${src_dir}/Makefile ]
+    then
+
+	mkg_h=/tmp/cc-fits-look.configure.mkgen.headers
+	mkg_s=/tmp/cc-fits-look.configure.mkgen.sources
+	mkg_p=/tmp/cc-fits-look.configure.mkgen.mainpro
+
+	if cd ${src_dir}
+	then
+
+	    2>/dev/null ls *.h > ${mkg_h}
+
+	    2>/dev/null egrep 'main.*(.*)' *.c | sed 's/:.*//' | sort -u > ${mkg_p}
+
+	    rm -f ${mkg_s}
+	    touch ${mkg_s}
+
+	    for src in *.c
+	    do
+		if [ -z "$(egrep ${src} ${mkg_p} )" ]
+		then
+		    echo ${src} >> ${mkg_s}
+		fi
+	    done
+
+	    #
+	    # cfitsio/docs/quick.pdf:3:
+	    #
+	    #   cc -o myprog myprog.c -L. -lcfitsio -lm -lnsl -lsocket
+	    #
+	    cat<<EOF>>Makefile
+CC = ${CC}
+CXX = ${CXX}
+
+CFLAGS = -I. -I${basd}/include 
+LFLAGS = -L${basd}/lib -lcfitsio -lm
+
+INSTALL_BASE = ${basd}
+INSTALL_BIN  = \$(INSTALL_BASE)/bin
+EOF
+
+            if [ 'src/fitsverify' = "${src_dir}" ]
+	    then
+	    cat<<EOF>>Makefile
+
+CFLAGS += -DSTANDALONE
+EOF
+
+	    fi
+
+	    #
+	    if [ -n "$(cat ${mkg_h})" ]
+	    then
+		use_headers=true
+
+		cat<<EOF>>Makefile
+
+HEADERS = $(cat ${mkg_h} | tr '\n' ' ')
+EOF
+	    else
+		use_headers=false
+	    fi
+
+	    #
+	    if [ -n "$(cat ${mkg_s})" ]
+	    then
+		use_sources=true
+
+		cat<<EOF>>Makefile
+
+SOURCES = $(cat ${mkg_s} | tr '\n' ' ')
+
+EOF
+	    else
+		use_sources=false
+	    fi
+
+	    #
+	    cat<<EOF>>Makefile
+
+all: $(cat ${mkg_p} | sed 's/\.c$//' | tr '\n' ' ')
+
+install: all
+	mkdir \$(INSTALL_BIN)
+EOF
+
+	    for src in $(cat ${mkg_p} )
+	    do
+		tgt=$(basename ${src} .c)
+
+		cat<<EOF>>Makefile
+	cp -p ${tgt} \$(INSTALL_BIN)
+EOF
+	    done
+
+	    #
+	    cat<<EOF>>Makefile
+
+clean:
+EOF
+
+	    for src in $(cat ${mkg_p} )
+	    do
+		tgt=$(basename ${src} .c)
+
+		cat<<EOF>>Makefile
+	rm -f ${tgt} \$(INSTALL_BIN)/${tgt}
+EOF
+	    done
+
+	    cat<<EOF>>Makefile
+	rmdir \$(INSTALL_BIN)
+EOF
+
+	    #
+	    for src in $(cat ${mkg_p} )
+	    do
+		tgt=$(basename ${src} .c)
+
+		if [ 'true' = "${use_sources}" ]
+		then
+		    cat<<EOF>>Makefile
+
+${tgt} : ${src} \$(SOURCES)
+	\$(CC) \$(CFLAGS) -o \$@ \$^ \$(LFLAGS)
+EOF
+	        else
+		    cat<<EOF>>Makefile
+
+${tgt} : ${src}
+	\$(CC) \$(CFLAGS) -o \$@ \$^ \$(LFLAGS)
+EOF
+		fi
+
+	    done
+
+	    #
+	    cat<<EOF>>Makefile
+
+
+%.o : %.c
+	\$(CC) -c \$(CFLAGS) \$< -o \$@ 
+
+EOF
+	    echo "M AG ${src_dir}"
+
+	    cd ~-
+
+	    return 0
+	fi
+    fi
+    return 1
+}
+
+
 function _make {
     src_dir="${1}"
 
@@ -87,9 +247,11 @@ function _make {
 	echo "M ?? ${src_dir}"
 
 	if 2>/dev/null $(cd ${src_dir} && 2>&1 1>make.log make ) ||
-	    ( test -f ${src_dir}/make.log && test -n "$(tail -n 1 ${src_dir}/make.log | egrep '^make\[1\]: Leaving directory' )" )
+	    ( test -f ${src_dir}/make.log && test -z "$(egrep error ${src_dir}/make.log)" )
 	then
 	    echo "M OK ${src_dir}"
+
+	    return 0
 	else
 	    cat<<EOF>&2
 $0 error building '${src_dir}' using 'make'.
@@ -97,7 +259,7 @@ $0 error building '${src_dir}' using 'make'.
 EOF
 	    2>/dev/null cat -n ${src_dir}/make.log | sed 's/^/ /' | tail -n 20
 
-	    exit 1
+	    return 1
 	fi
     fi
 }
@@ -109,7 +271,8 @@ function _make_install {
     then
 	echo "I ?? ${src_dir}"
 
-	if $(cd ${src_dir} && 2>&2 1>make-install.log make install)
+	if $(cd ${src_dir} && 2>&2 1>make-install.log make install) ||
+	    ( test -f ${src_dir}/make-install.log && test -z "$(egrep error ${src_dir}/make-install.log)" )
 	then
 	    echo "I OK ${src_dir}"
 	else
@@ -156,34 +319,33 @@ then
 fi
 
 #
-# Configure
+# make gen
 #
-for src_dir in $(cat "${parallel_batch}" )
+
+for name in $(2>/dev/null cat ${cc_mkgen})
 do
-    if ! _configure ${src_dir}
+    dir=src/${name}
+
+    if ! _make_gen ${dir}
     then
-	exit 1
+	1>&2 echo "$0 error generating make file in '${dir}'."
+
+    else
+	if ! _make ${dir}
+	then
+	    1>&2 echo "$0 error running make in '${dir}'."
+
+	else
+	    if ! _make_install ${dir}
+	    then
+		1>&2 echo "$0 error running 'make install' in '${dir}'."
+
+	    fi
+	fi
     fi
 done
 
-#
-# Make
-#
-for src_dir in $(cat "${parallel_batch}" )
-do
-    if ! _make ${src_dir}
-    then
-	exit 1
-    fi
-done
+rm -f ${cc_conf} ${cc_mkgen} ${mkg_h} ${mkg_s} ${mkg_p}
 
-#
-# Make install
-#
-for src_dir in $(cat "${parallel_batch}" )
-do
-    if ! _make_install ${src_dir}
-    then
-	exit 1
-    fi
-done
+
+exit 0

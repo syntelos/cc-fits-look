@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Download and unpack the packages referenced in 'sources.txt' under
+# Download and unpack the packages referenced in 'SOURCES.txt' under
 # directory 'src'.
 #
 
@@ -18,11 +18,11 @@ then
     #
     # Download sources, once, continue partials
     #
-    if wget -c -nc -i ../sources.txt
+    if wget -c -nc -i ../SOURCES.txt
     then
 	1>&2 echo "OK"
     else
-	1>&2 echo "$0 error downloading files referenced from sources.txt."
+	1>&2 echo "$0 error downloading files referenced from SOURCES.txt."
 	exit 1
     fi
 else

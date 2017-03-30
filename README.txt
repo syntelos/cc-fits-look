@@ -5,9 +5,10 @@ Syntelos project "FITS LOOK".
 
  Use CFITSIO in a staticly linked project format
 
- Build using './configure', and 'make' for executable binaries under
- './bin'.
 
+Building
+
+ Build using './download' and './configure'.
 
 
 References

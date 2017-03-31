@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Download sample fits files from SOURCES.txt to directory 'samples'
+#
+
+if [ ! -d samples ]
+then
+  mkdir samples
+fi
+
+if cd samples
+then
+  if wget -nd -np -nc -r -c -i ../SAMPLES.txt
+  then
+    rm -f $(ls * | egrep -v '\.fits$')
+  else
+    cat<<EOF>&2
+$0 error from wget.
+EOF
+    exit 1
+  fi
+else 
+  cat<<EOF>&2
+$0 error changing directory to 'samples'.
+EOF
+  exit 1
+fi

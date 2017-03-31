@@ -46,3 +46,9 @@ Notes
  Works on recent linux.  Expected to work on unixen since 'clang',
  'which' and 'wget'.  Mileage may vary accordingly.
 
+
+SAMPLES
+
+ Use './fetch' to download sample (truncated) fits files (test
+ vectors) from references listed in 'SAMPLES.txt'.
+

@@ -10,15 +10,19 @@ fi
 
 if cd samples
 then
-  if wget -nd -np -nc -r -c -i ../SAMPLES.txt
-  then
-    rm -f $(ls * | egrep -v '\.fits$')
-  else
-    cat<<EOF>&2
-$0 error from wget.
-EOF
-    exit 1
-  fi
+    for url in $(cat ../SAMPLES.txt)
+    do
+	#
+	# N.B. 
+	#  Need [loop (get, clean) ] over httpd index files!
+	#
+	wget -nd -np -nc -r -c ${url}
+
+	rm -f $(ls *.html*)
+
+    done
+
+    exit 0
 else 
   cat<<EOF>&2
 $0 error changing directory to 'samples'.

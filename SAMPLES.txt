@@ -1,1 +1,3 @@
 https://fits.gsfc.nasa.gov/samples/
+https://fits.gsfc.nasa.gov/registry/region/
+https://fits.gsfc.nasa.gov/registry/sip/
